@@ -1,6 +1,6 @@
 # Health Sanctuary — Next.js App
 
-A premium family health records management app built with **Next.js 14 (App Router)**, **TypeScript**, and **Tailwind CSS**.
+A very premium family health records management app built with **Next.js 14 (App Router)**, **TypeScript**, and **Tailwind CSS**.
 
 ## Screens
 - **`/`** — Home: Family profile selector & recent activity
