@@ -1,0 +1,199 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─── AUTH ────────────────────────────────────────────────────────────────────
+
+model User {
+  id            String         @id @default(cuid())
+  email         String         @unique
+  name          String?
+  passwordHash  String
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  familyMembers FamilyMember[]
+}
+
+// ─── FAMILY ───────────────────────────────────────────────────────────────────
+
+model FamilyMember {
+  id              String           @id @default(cuid())
+  userId          String
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name            String
+  role            String?          // "Primary Account", "Spouse", "Child", etc.
+  dateOfBirth     DateTime?
+  bloodType       String?
+  status          String           @default("STABLE") // STABLE | CRITICAL | MONITORING
+  avatarInitials  String?
+  avatarColor     String?          // Tailwind gradient class
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  records         ClinicalRecord[]
+  medications     Medication[]
+  conditions      Condition[]
+  allergies       Allergy[]
+  reports         LabReport[]
+  medicationLogs  MedicationLog[]
+
+  @@index([userId])
+}
+
+// ─── CLINICAL RECORDS ─────────────────────────────────────────────────────────
+
+model ClinicalRecord {
+  id             String         @id @default(cuid())
+  familyMemberId String
+  familyMember   FamilyMember   @relation(fields: [familyMemberId], references: [id], onDelete: Cascade)
+  visitDate      DateTime
+  facility       String?
+  physicianName  String?
+  visitType      String         @default("RECORD") // RECORD | REPORT | URGENT_CARE
+  summary        String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  prescriptions  Prescription[]
+  attachments    Attachment[]
+
+  @@index([familyMemberId])
+  @@index([visitDate])
+}
+
+model Prescription {
+  id               String         @id @default(cuid())
+  clinicalRecordId String
+  clinicalRecord   ClinicalRecord @relation(fields: [clinicalRecordId], references: [id], onDelete: Cascade)
+  medicationName   String
+  dosage           String?
+  frequency        String?
+  createdAt        DateTime       @default(now())
+}
+
+model Attachment {
+  id               String         @id @default(cuid())
+  clinicalRecordId String
+  clinicalRecord   ClinicalRecord @relation(fields: [clinicalRecordId], references: [id], onDelete: Cascade)
+  fileName         String
+  fileType         String         // "pdf" | "image"
+  fileUrl          String
+  fileSize         Int?
+  createdAt        DateTime       @default(now())
+}
+
+// ─── MEDICATIONS ──────────────────────────────────────────────────────────────
+
+model Medication {
+  id             String        @id @default(cuid())
+  familyMemberId String
+  familyMember   FamilyMember  @relation(fields: [familyMemberId], references: [id], onDelete: Cascade)
+  name           String
+  dosage         String?
+  form           String?       // "Tablet" | "Capsule" | "Drops" | "Injection"
+  frequency      String?       // "Daily" | "BID" | "TID" | "PRN"
+  scheduleTimes  String?       // JSON string: ["08:00", "20:00"]
+  instructions   String?       // "Take with food"
+  timeOfDay      String?       // "MORNING" | "AFTERNOON" | "EVENING" | "BEDTIME"
+  color          String?       // icon background color class
+  icon           String?       // material symbol name
+  dosesRemaining Int?
+  refillThreshold Int?         @default(7)
+  isActive       Boolean       @default(true)
+  startDate      DateTime      @default(now())
+  endDate        DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  logs           MedicationLog[]
+
+  @@index([familyMemberId])
+}
+
+model MedicationLog {
+  id             String       @id @default(cuid())
+  medicationId   String
+  medication     Medication   @relation(fields: [medicationId], references: [id], onDelete: Cascade)
+  familyMemberId String
+  familyMember   FamilyMember @relation(fields: [familyMemberId], references: [id], onDelete: Cascade)
+  scheduledTime  String       // "08:00"
+  scheduledDate  DateTime
+  takenAt        DateTime?
+  status         String       @default("PENDING") // TAKEN | MISSED | PENDING
+  createdAt      DateTime     @default(now())
+
+  @@unique([medicationId, scheduledDate, scheduledTime])
+  @@index([familyMemberId, scheduledDate])
+}
+
+// ─── CONDITIONS & ALLERGIES ───────────────────────────────────────────────────
+
+model Condition {
+  id             String       @id @default(cuid())
+  familyMemberId String
+  familyMember   FamilyMember @relation(fields: [familyMemberId], references: [id], onDelete: Cascade)
+  name           String
+  diagnosedDate  DateTime?
+  status         String       @default("ACTIVE") // ACTIVE | RESOLVED | MONITORING
+  notes          String?
+  createdAt      DateTime     @default(now())
+
+  @@index([familyMemberId])
+}
+
+model Allergy {
+  id             String       @id @default(cuid())
+  familyMemberId String
+  familyMember   FamilyMember @relation(fields: [familyMemberId], references: [id], onDelete: Cascade)
+  name           String
+  severity       String       @default("MODERATE") // MILD | MODERATE | SEVERE
+  reaction       String?
+  createdAt      DateTime     @default(now())
+
+  @@index([familyMemberId])
+}
+
+// ─── LAB REPORTS ──────────────────────────────────────────────────────────────
+
+model LabReport {
+  id             String       @id @default(cuid())
+  familyMemberId String
+  familyMember   FamilyMember @relation(fields: [familyMemberId], references: [id], onDelete: Cascade)
+  title          String
+  category       String       @default("BLOOD_WORK") // BLOOD_WORK | RADIOLOGY | VACCINATION | OTHER
+  labName        String?
+  physicianName  String?
+  reportDate     DateTime
+  status         String       @default("NORMAL") // NORMAL | FOLLOW_UP_NEEDED | CRITICAL | PENDING
+  summary        String?
+  fileUrl        String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  testResults    TestResult[]
+
+  @@index([familyMemberId])
+  @@index([category])
+}
+
+model TestResult {
+  id          String    @id @default(cuid())
+  reportId    String
+  report      LabReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  name        String    // "HbA1c", "Blood Pressure"
+  value       String    // "5.6", "128/82"
+  unit        String?   // "%", "mmHg", "mg/dL"
+  normalRange String?   // "< 5.7%"
+  trend       String?   // "UP" | "DOWN" | "STABLE"
+  status      String    @default("NORMAL") // NORMAL | ELEVATED | LOW | CRITICAL
+  createdAt   DateTime  @default(now())
+
+  @@index([reportId])
+}
